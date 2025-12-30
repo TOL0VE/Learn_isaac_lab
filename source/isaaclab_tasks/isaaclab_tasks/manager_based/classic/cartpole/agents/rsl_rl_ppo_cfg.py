@@ -9,20 +9,31 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 
 import isaaclab_tasks.manager_based.classic.cartpole.mdp.symmetry as symmetry
 
+# 1. Policy 配置 (保持不变)
+@configclass
+class MyLSTMPolicyCfg(RslRlPpoActorCriticCfg):
+    rnn_type: str = "lstm"
+    rnn_hidden_dim: int = 64
+    rnn_num_layers: int = 1
+    class_name = "ActorCriticRecurrent"
 
+# 2. Runner 配置
 @configclass
 class CartpolePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 16
     max_iterations = 150
     save_interval = 50
-    experiment_name = "cartpole"
-    policy = RslRlPpoActorCriticCfg(
+    experiment_name = "cartpole_lstm"
+    empirical_normalization = False
+
+    # 使用你的 LSTM 配置
+    policy = MyLSTMPolicyCfg(
         init_noise_std=1.0,
         actor_obs_normalization=False,
         critic_obs_normalization=False,
         actor_hidden_dims=[32, 32],
         critic_hidden_dims=[32, 32],
-        activation="elu",
+        activation="elu"
     )
     algorithm = RslRlPpoAlgorithmCfg(
         value_loss_coef=1.0,
