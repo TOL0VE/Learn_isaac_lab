@@ -1,3 +1,4 @@
+./isaaclab.sh --new
 # 1.define a roobot
 >
 >source/isaaclab_assets/isaaclab_assets/robots/cartpole.py
@@ -571,7 +572,42 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 
 import isaaclab_tasks.manager_based.classic.cartpole.mdp.symmetry as symmetry
 ```
-## 3.1 Runner
+## 3.1 RSL_RL
+
+### 3.1.1 MLP
+
+```python
+@configclass
+class CartpolePPORunnerCfg(RslRlOnPolicyRunnerCfg):
+    num_steps_per_env = 16
+    max_iterations = 150
+    save_interval = 50
+    experiment_name = "cartpole"
+    empirical_normalization = False
+    policy = RslRlPpoActorCriticCfg(
+        init_noise_std=1.0,
+        actor_hidden_dims=[32, 32],
+        critic_hidden_dims=[32, 32],
+        activation="elu",
+    )
+    algorithm = RslRlPpoAlgorithmCfg(
+        value_loss_coef=1.0,
+        use_clipped_value_loss=True,
+        clip_param=0.2,
+        entropy_coef=0.005,
+        num_learning_epochs=5,
+        num_mini_batches=4,
+        learning_rate=1.0e-3,
+        schedule="adaptive",
+        gamma=0.99,
+        lam=0.95,
+        desired_kl=0.01,
+        max_grad_norm=1.0,
+    )
+
+```
+
+### 3.1.2 LSTM+MLP
 
 ```python
 @configclass
@@ -579,7 +615,7 @@ class MyLSTMPolicyCfg(RslRlPpoActorCriticCfg):
     rnn_type: str = "lstm"
     rnn_hidden_dim: int = 64
     rnn_num_layers: int = 1
-    class_name = "ActorCriticRecurrent"
+    class_name = "ActorCriticRecurrent"  #care
 
 # Runner 配置 1
 @configclass
@@ -639,6 +675,233 @@ class CartpolePPORunnerWithSymmetryCfg(CartpolePPORunnerCfg):
         ),
     )
 
+```
+
+## 3.2 SKRL
+
+### 3.2.1 seed
+
+```yaml
+seed: 24 #manba out
+```
+
+### 3.2.2 models
+
+### 3.2.2.1 MLP
+
+```yaml
+models:
+    separate: False  # 暂时忽略，意思是 Actor 和 Critic 定义在一起管理
+  
+    # === 策略网络 (Actor) ===
+    policy:  
+        class: GaussianMixin   # 使用高斯分布模型（因为要加随机噪声探索）
+        
+        # 下面这些 clip_log_std 等等，是直接传给 GaussianMixin __init__ 函数的参数
+        # 你在文档的 GaussianMixin 类参数里能找到它们
+        clip_actions: False
+        clip_log_std: True
+        min_log_std: -20.0
+        max_log_std: 2.0
+        initial_log_std: 0.0
+
+        # 这里开始定义神经网络结构
+        network:
+        - name: net
+            input: OBSERVATIONS  # 输入层大小 = 传感器数据长度
+            layers: [32, 32]     # 中间有两个隐藏层，每层 32 个神经元
+            activations: elu     # 激活函数用 ELU
+        output: ACTIONS          # 输出层大小 = 机器人关节数量
+
+    # ===  (Critic) ===
+    value:
+        class: DeterministicMixin
+        clip_actions: False
+        network:
+        - name: net
+            input: OBSERVATIONS
+            layers: [32, 32]
+            activations: elu
+        output: ONE
+```
+
+| YAML 关键字 | 含义 | 实际 Python 逻辑 |
+| --- | --- | --- |
+| **`OBSERVATIONS`** | 观测空间维度 | `env.observation_space.shape[0]` (比如 48) |
+| **`ACTIONS`** | 动作空间维度 | `env.action_space.shape[0]` (比如 12) |
+| **`ONE`** | 标量 (用于 Critic) | `1` (Critic 输出的是一个价值分数，不是动作向量) |
+| **`STATES`** | 全局状态维度 | 用于非对称 Critic (Teacher)，包含特权信息 |
+
+#### 3.2.2.2 LSTM + MLP (future)
+
+```yaml
+models:
+    separate: False  # 暂时忽略，意思是 Actor 和 Critic 定义在一起管理
+  
+    # === 策略网络 (Actor) ===
+    policy:  
+        class: GaussianMixin   # 使用高斯分布模型（因为要加随机噪声探索）
+        
+        # 下面这些 clip_log_std 等等，是直接传给 GaussianMixin __init__ 函数的参数
+        # 你在文档的 GaussianMixin 类参数里能找到它们
+        clip_actions: False
+        clip_log_std: True
+        min_log_std: -20.0
+        max_log_std: 2.0
+        initial_log_std: 0.0
+
+        # 这里开始定义神经网络结构
+        network:
+            # 第一层：LSTM (记忆模块)
+            - name: memory_layer
+                input: OBSERVATIONS
+                type: LSTM
+                num_layers: 1          # LSTM 层数 定义层数的参数叫 num_layers
+                hidden_size: 256   
+                
+            # 第二层：MLP (决策/解码模块)
+            - name: decision_layer
+                type: MLP
+                layers: [128, 64]      # MLP 这里依然叫 layers，且必须是列表
+                activations: elu
+        output: ACTIONS
+
+    # ===  (Critic) ===
+    value:
+        class: DeterministicMixin
+        clip_actions: False
+        network:
+        - name: net
+            input: OBSERVATIONS
+            layers: [32, 32]
+            activations: elu
+        output: ONE
+```
+
+### 3.2.3 memory
+
+```yaml
+memory:
+  class: RandomMemory
+  memory_size: -1  # automatically determined (same as agent:rollouts)
+  #“给我准备一个支持随机存取的临时背包 (RandomMemory)，背包的大小 (memory_size) 只要刚好能装下 Agent 这一轮采集的数据 (-1) 就行了。反正学完这一轮就要倒掉的。”
+```
+
+### 3.2.4 agent
+
+#### 3.2.4.1 PPO
+
+```yaml
+# PPO agent configuration
+# https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
+
+agent:
+  # 1. 算法核心类
+  class: PPO  
+
+  # 2. 采样与学习节奏 (The Loop)
+  # 含义：每次更新网络前，每个环境先玩几步？
+  # 计算：如果 num_envs=4096, rollouts=16，那总数据量 = 65,536 步
+  # 建议：保持 16~24，这是 Isaac Lab 的经验值
+  rollouts: 16
+
+  # 含义：拿到的这批 65,536 条数据，要反复复习几遍？
+  # 建议：5~8 遍。太少学不会，太多会过拟合（钻牛角尖）
+  learning_epochs: 8
+
+  # 含义：一口气吃不下 6万条数据，切成几块喂给显卡？
+  # 建议：4 或 8。切得越细，显存占用越低
+  mini_batches: 8
+
+  # 3. 远见与权衡 (RL Hyperparameters)
+  # 含义：折扣因子 (Gamma)。代表 AI 有多在乎“未来”的奖励。
+  # 0.99 = 很有远见；0.5 = 鼠目寸光。
+  # 建议：机器人任务通常用 0.99
+  discount_factor: 0.99
+
+  # 含义：GAE 参数 (Lambda)。用于平衡方差和偏差。
+  # 建议：0.95 是 RL 界的黄金标准，别动它
+  lambda: 0.95
+
+  # 4. 学习速度 (Optimization)
+  # 含义：学习率 (Learning Rate)。步子迈多大。
+  # 建议：3e-4 (0.0003) 是最常用的起始值
+  learning_rate: 3.0e-04
+
+  # 含义：学习率调度器。这在 Isaac Gym/Lab 里非常重要！
+  # 作用：它会根据 KL 散度（策略变化的剧烈程度）自动调整学习率
+  learning_rate_scheduler: KLAdaptiveLR
+
+  # 含义：KL 散度的阈值。
+  # 逻辑：如果策略变化超过 0.008，说明步子太大了，学习率会自动减半。
+  # 建议：0.008 ~ 0.01 都是合理范围
+  learning_rate_scheduler_kwargs:
+    kl_threshold: 0.008
+
+  # 5. 数据预处理 (Preprocessing) —— ⚠️ 你的论文复现关键点！
+  # 含义：状态归一化。把传感器数据（如高度 0.3, 速度 20.0）缩放到标准正态分布
+  # 🔴 现状：null (关闭)。这对于四足机器人是 ❌ 错误的！
+  # ✅ 修改：必须改成 RunningStandardScaler，否则很难收敛
+  state_preprocessor: null
+  state_preprocessor_kwargs: null
+
+  # 含义：价值归一化。把 Critic 预测的分数也归一化
+  # 建议：通常也开启 RunningStandardScaler
+  value_preprocessor: null
+  value_preprocessor_kwargs: null
+
+  # 6. 训练稳定性 (Clipping & Safety)
+  # 含义：随机探索步数。PPO 是 On-Policy 的，这里通常设为 0
+  random_timesteps: 0
+  learning_starts: 0
+
+  # 含义：梯度裁剪。防止梯度爆炸（更新幅度过大导致数值溢出）
+  grad_norm_clip: 1.0
+
+  # 含义：PPO 核心参数。限制新旧策略的差异不能超过 20%
+  # 建议：0.2 是标准值，别动
+  ratio_clip: 0.2
+
+  # 含义：限制 Critic 对价值预测的更新幅度
+  value_clip: 0.2
+  clip_predicted_values: True
+
+  # 7. 奖励与探索 (Rewards)
+  # 含义：熵奖励系数。鼓励 AI “多尝试不同动作”
+  # 建议：AMP 任务通常设为 0.0 或极小值 (0.001)，因为我们希望动作像真狗一样稳定，不要瞎晃
+  entropy_loss_scale: 0.0
+
+  # 含义：价值损失的权重。Critic 训练的重要性
+  value_loss_scale: 2.0
+
+  # 含义：KL 散度目标。如果设了 scheduler，这个可以设为 0
+  kl_threshold: 0.0
+
+  # 含义：奖励缩放。把所有奖励乘以 1.0 (没变)
+  # 有时候为了数值稳定，会缩放到 0.1 或 0.01
+  rewards_shaper_scale: 1.0
+
+  # 含义：超时处理。
+  # True = 超时被视为“任务没完成但没死” (Bootstrap)
+  # False = 超时被视为“任务结束”
+  # 建议：对于无限时间任务（走路），通常设为 True 或 False 影响不大，Isaac Lab 默认 False
+  time_limit_bootstrap: False
+
+  # 8. 实验记录 (Logging)
+  experiment:
+    directory: "cartpole"       # 日志存哪？
+    experiment_name: ""         # 实验名叫啥？
+    write_interval: auto        # 多久写一次 Tensorboard
+    checkpoint_interval: auto   # 多久存一次模型 (.pt 文件)
+```
+
+### 3.2.4 trainer
+
+```yaml
+trainer:
+  class: SequentialTrainer
+  timesteps: 2400 #意思是：“循环跑 2400 步就停下来”。
+  environment_info: log
 ```
 
 # 4 register
