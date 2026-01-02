@@ -847,6 +847,8 @@ class HumanoidAmpEnv(DirectRLEnv):
         # 初始化父类
         super().__init__(cfg, render_mode, **kwargs)
 
+        # 这一行执行的时候，_setup_scene 已经跑完了
+
         # --- 1. 预计算动作缩放参数 (Action Scaling) ---
         # Direct 模式需要手动实现动作到物理量的映射逻辑。
         # 这里计算了关节软限位，以便将神经网络输出的 [-1, 1] 映射到 [min_joint_pos, max_joint_pos]。
