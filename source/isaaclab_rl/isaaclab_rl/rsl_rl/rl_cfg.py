@@ -277,3 +277,108 @@ class RslRlOnPolicyRunnerCfg(RslRlBaseRunnerCfg):
     algorithm: RslRlPpoAlgorithmCfg = MISSING
     """The algorithm configuration."""
     # 算法配置（嵌套上面的 RslRlPpoAlgorithmCfg）。
+
+
+
+###############################
+# AMP Component configurations#
+###############################
+
+@configclass
+class RslRlAmpDiscriminatorCfg:
+    """Configuration for the AMP Discriminator network."""
+    # AMP 判别器网络的配置类。
+
+    class_name: str = "AMPOnPolicyRunner"
+    """The discriminator class name."""
+    # 判别器类名。
+
+    hidden_dims: list[int] = MISSING
+    """The hidden dimensions of the discriminator network."""
+    # 判别器网络的隐藏层维度。
+    # 通常比 Policy 网络大，例如 [1024, 512]。
+
+    reward_scale: float = MISSING
+    """The scale of the style reward."""
+    # 风格奖励的缩放系数。
+    # 控制 AMP 奖励对总奖励的贡献程度，非常关键的超参数。通常在 1.0 到 2.0 之间。
+
+    loss_type: Literal["BCEWithLogits", "Wasserstein", "LeastSquares"] = "BCEWithLogits"
+    """The loss function used for the discriminator."""
+    # 判别器使用的损失函数类型。默认为 BCEWithLogits。
+
+    empirical_normalization: bool = False
+    """Whether to normalize the AMP inputs empirically."""
+    # 是否对 AMP 的输入（观察值）进行经验归一化。
+
+
+@configclass
+class RslRlAmpLoaderCfg:
+    """Configuration for the AMP Expert Data Loader."""
+    # AMP 专家数据加载器的配置类。
+
+    amp_data_path: str = MISSING
+    """Root path to the directory containing expert motion files (.npy)."""
+    # 包含专家动作文件 (.npy) 的根目录路径。
+
+    datasets: dict[str, float] = MISSING
+    """A dictionary mapping dataset filenames to their sampling weights."""
+    # 专家数据集映射表。Key 是文件名，Value 是采样权重。
+    # 例如: {"walk.npy": 1.0, "run.npy": 0.5}
+
+    slow_down_factor: float = 1.0
+    """Factor to slow down the reference motion playback."""
+    # 动作放慢倍率。默认为 1.0 (原速)。
+
+
+##################################
+# AMP Algorithm configurations   #
+##################################
+
+@configclass
+class RslRlAmpPpoAlgorithmCfg(RslRlPpoAlgorithmCfg):
+    """Configuration for the AMP-PPO algorithm (Inherits from PPO)."""
+    # AMP-PPO 算法配置类（继承自标准 PPO 配置）。
+
+    #?
+    class_name: str = "AMP_PPO"
+    """The algorithm class name."""
+    # 算法类名，必须与 AMPOnPolicyRunner 中实例化的类名一致。
+
+    amp_replay_buffer_size: int = 100000
+    """Size of the replay buffer for policy-generated motions."""
+    # 用于存储策略生成动作的 Replay Buffer 大小。
+    # 判别器训练需要对比 Buffer 中的假数据和 Loader 中的真数据。
+
+    min_normalized_std: float = 1e-6
+    """Minimum standard deviation for normalization to avoid division by zero."""
+    # 归一化时的最小标准差，防止除以零。
+
+
+#############################
+# AMP Runner configurations #
+#############################
+
+@configclass
+class RslRlAmpOnPolicyRunnerCfg(RslRlOnPolicyRunnerCfg):
+    """Configuration of the runner for AMP on-policy algorithms."""
+    # AMP On-Policy 算法的 Runner 配置类。
+
+    class_name: str = "AMPOnPolicyRunner"
+    """The runner class name."""
+    # Runner 类名。
+
+    # Override the algorithm config to use AMP-PPO
+    algorithm: RslRlAmpPpoAlgorithmCfg = MISSING
+    """The AMP algorithm configuration."""
+    # 算法配置，强制指定为 RslRlAmpPpoAlgorithmCfg。
+
+    # Add Discriminator config
+    discriminator: RslRlAmpDiscriminatorCfg = MISSING
+    """The discriminator configuration."""
+    # 判别器配置。
+
+    # Add Dataset/Loader config
+    dataset: RslRlAmpLoaderCfg = MISSING
+    """The expert dataset configuration."""
+    # 专家数据集配置。

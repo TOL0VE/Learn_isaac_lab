@@ -11,7 +11,7 @@ from torch.nn import functional as F
 from rsl_rl.networks import EmpiricalNormalization
 
 
-class AMPDiscriminator(nn.Module):
+class Discriminator(nn.Module):
     """
     AMP 算法的判别器网络实现。
     
@@ -228,13 +228,20 @@ class AMPDiscriminator(nn.Module):
             alpha = alpha.expand_as(expert)
             data = alpha * expert + (1 - alpha) * policy
             data = data.detach().requires_grad_(True)
-            # ... (WGAN-GP 计算逻辑) ...
             h = self.trunk(data)
-            # ... 
-            # (为了简洁，省略中间代码，逻辑与原文件一致)
-            scores = self.linear(h) # 注意：这里如果用了minibatch std也要加
-            
-            grad = autograd.grad(outputs=scores, inputs=data, ...)[0]
+            if self.use_minibatch_std:
+                with torch.no_grad():
+                    s = self._minibatch_std_scalar(h)
+                h = torch.cat([h, s], dim=-1)
+            scores = self.linear(h)
+            grad = autograd.grad(
+                outputs=scores,
+                inputs=data,
+                grad_outputs=torch.ones_like(scores),
+                create_graph=True,
+                retain_graph=True,
+                only_inputs=True,
+            )[0]
             return lambda_ * (grad.norm(2, dim=1) - 1.0).pow(2).mean()
             
         elif self.loss_type == "BCEWithLogits":

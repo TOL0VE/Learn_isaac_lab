@@ -116,7 +116,7 @@ from datetime import datetime
 
 # 导入 RSL-RL 的 Runner (执行训练循环的核心类)
 # OnPolicyRunner 用于 PPO，DistillationRunner 用于蒸馏
-from rsl_rl.runners import DistillationRunner, OnPolicyRunner
+from rsl_rl.runners import DistillationRunner, OnPolicyRunner,AMPOnPolicyRunner
 
 # 导入 Isaac Lab 的环境相关类
 from isaaclab.envs import (
@@ -287,6 +287,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     elif agent_cfg.class_name == "DistillationRunner":
         # 蒸馏训练器
         runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+    elif agent_cfg.class_name == "AMPOnPolicyRunner":
+        #AMP
+        runner = AMPOnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
     else:
         raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
     

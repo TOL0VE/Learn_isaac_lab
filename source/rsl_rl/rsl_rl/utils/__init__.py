@@ -15,6 +15,8 @@ from .utils import (
     unpad_trajectories,
 )
 
+from .motion_loader import AMPLoader
+from .exporter import export_policy_as_onnx
 __all__ = [
     "get_param",
     "resolve_nn_activation",
@@ -23,4 +25,6 @@ __all__ = [
     "split_and_pad_trajectories",
     "string_to_callable",
     "unpad_trajectories",
+    "AMPLoader",
+    "export_policy_as_onnx"
 ]

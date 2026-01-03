@@ -16,9 +16,9 @@ from rsl_rl.modules import ActorCritic, ActorCriticRecurrent, ActorCriticCNN
 from rsl_rl.storage import RolloutStorage
 
 # 导入 AMP 相关的组件 (确保这些路径在你的项目中存在)
-from rsl_rl_amp.storage import ReplayBuffer
-from rsl_rl_amp.networks import Discriminator
-from rsl_rl_amp.utils import AMPLoader
+from rsl_rl.storage import ReplayBuffer
+from rsl_rl.networks.discriminator import Discriminator
+from rsl_rl.utils import AMPLoader
 
 
 class AMP_PPO:

@@ -21,5 +21,5 @@ __all__ = [
     "StudentTeacher",
     "StudentTeacherRecurrent",
     "resolve_rnd_config",
-    "resolve_symmetry_config",
+    "resolve_symmetry_config"
 ]

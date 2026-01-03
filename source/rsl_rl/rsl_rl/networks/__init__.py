@@ -9,6 +9,8 @@ from .cnn import CNN
 from .memory import HiddenState, Memory
 from .mlp import MLP
 from .normalization import EmpiricalDiscountedVariationNormalization, EmpiricalNormalization
+from .discriminator import Discriminator
+from .ac_moe import ActorMoE, ActorCriticMoE
 
 __all__ = [
     "CNN",
@@ -17,4 +19,7 @@ __all__ = [
     "EmpiricalNormalization",
     "HiddenState",
     "Memory",
+    "Discriminator",
+    "ActorMoE",
+    "ActorCriticMoE"
 ]

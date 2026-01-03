@@ -15,6 +15,17 @@ from . import agents
 # Register Gym environments.
 ##
 
+
+gym.register(
+    id="Isaac-Humanoid-AMP-rsl-Dance-Direct-v0",
+    entry_point=f"{__name__}.humanoid_amp_env:HumanoidAmpEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.humanoid_amp_env_cfg:HumanoidAmpDanceEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_amp_cfg:HumanoidAmpPPORunnerCfg",
+    },
+)
+
 # gym.register(
 #     id="Isaac-Humanoid-AMP-Dance-Direct-v0",
 #     entry_point=f"{__name__}.humanoid_amp_env:HumanoidAmpEnv",
