@@ -80,9 +80,10 @@ class HumanoidAmpEnv(DirectRLEnv):
     def _apply_action(self):
         target = self.action_offset + self.action_scale * self.actions
         self.robot.set_joint_position_target(target)
+        
 
     def _get_observations(self) -> dict:
-        # build task observation
+        # 1. 构建 Task/Policy 观测
         obs = compute_obs(
             self.robot.data.joint_pos,
             self.robot.data.joint_vel,
@@ -93,14 +94,24 @@ class HumanoidAmpEnv(DirectRLEnv):
             self.robot.data.body_pos_w[:, self.key_body_indexes],
         )
 
-        # update AMP observation history
+        # 2. 更新 AMP 历史 Buffer
+        # (建议用切片操作代替循环，效率更高，但保留你的循环逻辑也没问题)
         for i in reversed(range(self.cfg.num_amp_observations - 1)):
             self.amp_observation_buffer[:, i + 1] = self.amp_observation_buffer[:, i]
-        # build AMP observation
         self.amp_observation_buffer[:, 0] = obs.clone()
-        self.extras = {"amp_obs": self.amp_observation_buffer.view(-1, self.amp_observation_size)}
 
-        return {"policy": obs}
+        # 3. 准备 Flatten 后的数据
+        # view(-1, ...) 自动处理 batch 维度
+        amp_obs_flat = self.amp_observation_buffer.view(-1, self.amp_observation_size)
+
+        # 4. (可选) 如果你还想在 Log 里看到它，可以保留在 extras 里
+        self.extras["amp_obs"] = amp_obs_flat
+
+        # 5. 【关键修改】在返回的字典里加上 "amp"
+        return {
+            "policy": obs,
+            "amp": amp_obs_flat 
+        }
 
     def _get_rewards(self) -> torch.Tensor:
         return torch.ones((self.num_envs,), dtype=torch.float32, device=self.sim.device)

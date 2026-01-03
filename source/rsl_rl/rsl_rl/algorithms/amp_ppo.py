@@ -185,7 +185,7 @@ class AMP_PPO:
             )
 
         # 添加到 Storage
-        self.storage.add_transitions(self.transition)
+        self.storage.add_transition(self.transition)
         self.transition.clear()
         
         # [修改 4] 重置结束环境的 RNN 状态
@@ -198,9 +198,31 @@ class AMP_PPO:
         self.amp_transition.clear()
 
     def compute_returns(self, obs: TensorDict) -> None:
-        """计算 GAE 回报。"""
+        st = self.storage
+        # [修改点 1] self.policy -> self.actor_critic
         last_values = self.actor_critic.evaluate(obs).detach()
-        self.storage.compute_returns(last_values, self.gamma, self.lam)
+        
+        # Compute returns and advantages
+        advantage = 0
+        for step in reversed(range(st.num_transitions_per_env)):
+            if step == st.num_transitions_per_env - 1:
+                next_values = last_values
+            else:
+                next_values = st.values[step + 1]
+                
+            next_is_not_terminal = 1.0 - st.dones[step].float()
+            
+            delta = st.rewards[step] + next_is_not_terminal * self.gamma * next_values - st.values[step]
+            advantage = delta + next_is_not_terminal * self.gamma * self.lam * advantage
+            st.returns[step] = advantage + st.values[step]
+            
+        # Compute the advantages
+        st.advantages = st.returns - st.values
+        
+        # [修改点 2] 确保 normalize_advantage_per_mini_batch 存在
+        # 如果你的 __init__ 里没定义这个变量，可以直接删掉 if 判断，保留内部逻辑（默认进行归一化）
+        if not getattr(self, "normalize_advantage_per_mini_batch", False):
+            st.advantages = (st.advantages - st.advantages.mean()) / (st.advantages.std() + 1e-8)
 
     def update(
         self,
